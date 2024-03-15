@@ -1,0 +1,531 @@
+Program.Sub.ScreenSU.Start
+Gui.BomFlex..create
+Gui.BomFlex..caption("Standalone BOM Issue")
+Gui.BomFlex..size(10845,6375)
+Gui.BomFlex..position(0,0)
+Gui.BomFlex..event(Resize,bomflex_resize)
+Gui.BomFlex..event(UnLoad,bomflex_unload)
+Gui.BomFlex..alwaysontop(True)
+Gui.BomFlex..forecolor(0)
+Gui.BomFlex..fontstyle(,,)
+Gui.BomFlex..BackColor(-2147483633)
+Gui.BomFlex..mousepointer(0)
+Gui.BomFlex..MinX(0)
+Gui.BomFlex..MinY(0)
+Gui.BomFlex.frame1.create(frame)
+Gui.BomFlex.frame1.size(10470,795)
+Gui.BomFlex.frame1.position(105,0)
+Gui.BomFlex.txtQTY.create(textbox,"",True,1215,300,0,2200,300,True,0,"Arial",8,-2147483643,1)
+Gui.BomFlex.txtQTY.text("1")
+Gui.BomFlex.txtQTY.parent("frame1")
+Gui.BomFlex.txtQTY.numericonly(2)
+Gui.BomFlex.lbl1.create(label,"Quantity",True,1935,255,1,2300,100,True,0,"Arial",8,-2147483633,0)
+Gui.BomFlex.lbl1.parent("frame1")
+Gui.BomFlex.txtBOM.create(textbox,"",True,1560,300,0,100,300,True,0,"Arial",8,-2147483643,1)
+Gui.BomFlex.txtBOM.text("")
+Gui.BomFlex.txtBOM.parent("frame1")
+Gui.BomFlex.txtBOM.maxLength(20)
+Gui.BomFlex.txtBOM.event(LostFocus,txtbom_lostfocus)
+Gui.BomFlex.cmdBrowse.create(button)
+Gui.BomFlex.cmdBrowse.caption("^")
+Gui.BomFlex.cmdBrowse.size(315,270)
+Gui.BomFlex.cmdBrowse.position(1745,315)
+Gui.BomFlex.cmdBrowse.parent("frame1")
+Gui.BomFlex.cmdBrowse.event(Click,cmdbrowse_click)
+Gui.BomFlex.lbl2.create(label,"Parent Number",True,1935,255,1,200,110,True,0,"Arial",8,-2147483633,0)
+Gui.BomFlex.lbl2.parent("frame1")
+Gui.BomFlex.cmdGENBOM.create(button)
+Gui.BomFlex.cmdGENBOM.caption("Explode")
+Gui.BomFlex.cmdGENBOM.size(855,375)
+Gui.BomFlex.cmdGENBOM.position(3560,245)
+Gui.BomFlex.cmdGENBOM.parent("frame1")
+Gui.BomFlex.cmdGENBOM.event(Click,BOMGEN)
+Gui.BomFlex.cmdIssue.create(button)
+Gui.BomFlex.cmdIssue.caption("Issue")
+Gui.BomFlex.cmdIssue.size(855,375)
+Gui.BomFlex.cmdIssue.position(9465,245)
+Gui.BomFlex.cmdIssue.parent("frame1")
+Gui.BomFlex.cmdIssue.event(Click,cmdissue_click)
+Gui.BomFlex.cmdPrint.create(button)
+Gui.BomFlex.cmdPrint.caption("Print")
+Gui.BomFlex.cmdPrint.size(855,375)
+Gui.BomFlex.cmdPrint.position(4655,245)
+Gui.BomFlex.cmdPrint.parent("frame1")
+Gui.BomFlex.cmdPrint.event(Click,cmdprint_click)
+Gui.BomFlex.lbl4.create(label,"Location:",True,825,255,1,5850,315,True,0,"Arial",8,-2147483633,0)
+Gui.BomFlex.lbl4.parent("frame1")
+Gui.BomFlex.lblLoc.create(label,"",True,1935,255,1,6705,300,True,0,"Arial",8,-2147483633,0)
+Gui.BomFlex.lblLoc.parent("frame1")
+Gui.BomFlex.gsBOM.create(gsflexgrid)
+Gui.BomFlex.gsBOM.size(10455,4875)
+Gui.BomFlex.gsBOM.position(135,845)
+Gui.BomFlex.lbl3.create(label,"Loading...",True,3435,555,1,3600,2700,True,0,"Arial",24,-2147483633,0)
+Gui.BomFlex.txtDesc.Create(TextBox,"",False,1215,300,0,7260,390,True,0,"Arial",8,-2147483643,1)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Variable.UDT.BOM.Define("PART",String)
+Variable.UDT.BOM.Define("PARENT",String)
+Variable.UDT.BOM.Define("QUANTITY",Float)
+Variable.UDT.BOM.Define("UM",String)
+Variable.UDT.BOM.Define("LEVEL",Long)
+Variable.UDT.BOM.Define("SEQU",String)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'TJS Sept 2020
+'Customer:  Simpson Performance
+'Business Case: Customer would like to have an existing GAB script edited to call a Crystal label 
+'in order to phase out the current Bartender label. Customer is currently on GSS 2017.1 / PVSW v13.1 
+'and GSS will honor this version for this project only. They are needing to move off of Bartender 
+'prior to upgrading and the CODESOFT solution is not a cost effective option for them.
+
+'Modified from ATG_BOM_ISSUE.gas
+
+V.Global.iOrder.Declare(Long)
+V.uGlobal.uBOM.Declare(Bom)
+V.uGlobal.uBOM.Redim(0,1)
+V.Global.sPart.Declare(String)
+V.Local.bloc.Declare(Boolean)
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+F.Intrinsic.Control.If(V.Caller.User,<>,"SUPERVSR")
+	F.Global.Security.IsInGroup(V.Caller.User,"MO",V.Caller.CompanyCode,V.Local.bLoc)
+	F.Intrinsic.Control.If(V.Local.bloc,=,True)
+		Gui.BomFlex.lblLoc.Caption("MO")
+	F.Intrinsic.Control.EndIf
+	
+	F.Global.Security.IsInGroup(V.Caller.User,"CA",V.Caller.CompanyCode,V.Local.bLoc)
+	F.Intrinsic.Control.If(V.Local.bloc,=,True)
+		F.Intrinsic.Control.If(V.Screen.BomFlex!lblLoc.Caption,<>,"")
+			F.Intrinsic.UI.Msgbox("Please notify your Supervisor that you are in multiple groups (Of the TX, CA, and MO groups)")
+		F.Intrinsic.Control.EndIf
+		Gui.BomFlex.lblLoc.Caption("CA")
+	F.Intrinsic.Control.EndIf
+	
+	F.Global.Security.IsInGroup(V.Caller.User,"TX",V.Caller.CompanyCode,V.Local.bLoc)
+	F.Intrinsic.Control.If(V.Local.bloc,=,True)
+		F.Intrinsic.Control.If(V.Screen.BomFlex!lblLoc.Caption,<>,"")
+			F.Intrinsic.UI.Msgbox("Please notify your Supervisor that you are in multiple groups (Of the TX, CA, and MO groups)")
+		F.Intrinsic.Control.EndIf
+		Gui.BomFlex.lblLoc.Caption("TX")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Screen.BomFlex!lblLoc.Caption,=,"")
+		F.Intrinsic.UI.Msgbox("You may not use this menu item unless you are assigned to either the TX, CA, or MO User Groups.")
+		F.Intrinsic.Control.CallSub(Bomflex_unload)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	'for testing in TX only
+	Gui.BomFlex.lblLoc.Caption("TX")
+F.Intrinsic.Control.EndIf
+Gui.BomFlex..Show
+Program.Sub.Main.End
+
+Program.Sub.UPDATE.Start
+V.Local.sSQL.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.ix.Declare(Long)
+
+V.Local.sPart.Set(V.Global.sPart)
+
+F.Intrinsic.Control.For(V.Local.ix,0,V.uGlobal.uBOM.UBound,1)
+	F.Intrinsic.Control.If(V.uGlobal.uBOM(V.Local.ix)!PARENT,=,V.Local.sPart)
+
+		F.Intrinsic.String.Concat("Select * from GCG_6079_BOM_ISS_CR where TERMINAL='",V.Caller.Terminal,"' AND PARENT='",V.Local.sPart,"' and flag=0 ORDER BY ",V.Ambient.DblQuote,"LEVEL",V.Ambient.DblQuote,",SEQU",V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenRecordsetRW("rstissue",V.Local.sSQL)
+
+		F.Intrinsic.Control.If(V.ODBC.conx!rstissue.EOF,=,False)
+		F.Intrinsic.Math.Add(V.Global.iOrder,1,V.Global.iOrder)
+			F.ODBC.conx!rstissue.Set!flag(V.Global.iOrder)
+			V.Global.sPart.Set(V.ODBC.conx!rstissue.FieldValTrim!PART)
+			F.ODBC.conx!rstissue.Update
+			F.ODBC.conx!rstissue.Close
+			F.Intrinsic.Control.CallSub(Update)
+		F.Intrinsic.Control.Else
+			F.ODBC.conx!rstissue.Close
+		F.Intrinsic.Control.EndIf
+
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.ix)
+Program.Sub.UPDATE.End
+
+Program.Sub.BOMGEN.Start
+V.Local.sSQL.Declare(String)
+V.Local.ftemp.Declare(Float)
+V.Local.stemp.Declare(String)
+V.Local.stemp2.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.x.Declare(Long)
+V.Local.y.Declare(Long)
+V.Local.itemp.Declare(Long)
+V.Local.iLevel.Declare(Long)
+V.Local.iCount.Declare(Long)
+
+F.Intrinsic.Control.If(V.Screen.BomFlex!txtBOM.Text.trim,=,"")
+	F.Intrinsic.UI.Msgbox("Parent Number Required.","Required.")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+V.uGlobal.uBOM.Redim(0,1)
+
+Gui.BomFlex..Enabled(FALSE)
+Gui.BomFlex.gsBOM.Visible(FALSE)
+
+F.Intrinsic.String.Concat("DELETE FROM GCG_6079_BOM_ISS_CR WHERE TERMINAL='",V.Caller.Terminal,"'",V.Local.sSQL)
+F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+
+V.Local.sPart.Set(V.Screen.BomFlex!txtBOM.text)
+
+V.Local.x.Set(0)
+V.Local.iLevel.Set(1)
+
+F.Intrinsic.Control.For(V.Local.y,0,V.uGlobal.uBOM.UBound,1)
+	F.Intrinsic.String.Concat("Select * from V_BOM_MSTR where SEQUENCE_BOM<> '0000' AND PARENT='",V.Local.sPart,"'",V.Local.sSQL)
+	
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstBOM",V.Local.sSQL)
+
+	'Build array to find all components of components
+	F.Intrinsic.Control.DoUntil(V.ODBC.conx!rstBOM.EOF,=,True)
+
+		F.Intrinsic.Control.If(V.ODBC.conx!rstBOM.FieldValTrim!PART,<>,"")
+			V.uGlobal.uBOM(V.Local.x)!PARENT.set(V.ODBC.conx!rstBOM.FieldValTrim!PARENT)
+			V.uGlobal.uBOM(V.Local.x)!PART.set(V.ODBC.conx!rstBOM.FieldValTrim!PART)
+			V.uGlobal.uBOM(V.Local.x)!QUANTITY.set(V.ODBC.conx!rstBOM.FieldValTrim!QUANTITY)
+			V.uGlobal.uBOM(V.Local.x)!UM.set(V.ODBC.conx!rstBOM.FieldValTrim!UM_INVENTORY)
+			V.uGlobal.uBOM(V.Local.x)!SEQU.set(V.ODBC.conx!rstBOM.FieldValTrim!SEQUENCE_BOM)
+			V.uGlobal.uBOM(V.Local.x)!LEVEL.set(V.Local.iLevel)
+			F.Intrinsic.Math.Add(V.Local.x,1,V.Local.x)
+
+			V.uGlobal.uBOM.RedimPreserve(0,V.Local.x)
+			F.Intrinsic.Math.Add(V.Local.iCount,1,V.Local.iCount)
+		F.Intrinsic.Control.EndIf
+
+		F.ODBC.conx!rstBOM.MoveNext
+	F.Intrinsic.Control.Loop
+		F.Intrinsic.Control.If(V.Local.iCount,<>,0)
+		F.Intrinsic.Math.Sub(V.Local.x,V.Local.iCount,V.Local.itemp)
+
+		F.Intrinsic.Control.If(V.Local.Y,=,V.Local.itemp)
+			F.Intrinsic.Math.Add(V.Local.iLevel,1,V.Local.iLevel)
+			V.Local.iCount.Set(0)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstBOM.Close
+
+	V.Local.sPart.Set(V.uGlobal.uBOM(V.Local.y)!PART)
+	F.Intrinsic.String.Replace(V.Local.sPart,"'","''",V.Local.sPart)
+F.Intrinsic.Control.Next(V.Local.y)
+F.Intrinsic.String.Concat("SELECT * FROM GCG_6079_BOM_ISS_CR Where TERMINAL='",V.Caller.Terminal,"'",V.Local.sSQL)
+F.ODBC.Connection!conx.OpenRecordsetRW("rstBOM",V.Local.sSQL)
+
+F.Intrinsic.Control.For(V.Local.y,0,V.uGlobal.uBOM.UBound,1)
+	V.Local.sPart.Set(V.uGlobal.uBOM(V.Local.y)!PART)
+	F.Intrinsic.String.Replace(V.Local.sPart,"'","''",V.Local.sPart)
+	F.Intrinsic.Control.If(V.Local.sPart,<>,"")
+		F.ODBC.conx!rstBOM.AddNew
+		F.ODBC.conx!rstBOM.Set!TERMINAL(V.Caller.Terminal)
+		F.ODBC.conx!rstBOM.Set!PARENT(V.uGlobal.uBOM(V.Local.y)!PARENT)
+		F.ODBC.conx!rstBOM.Set!UM(V.uGlobal.uBOM(V.Local.y)!UM)
+		F.ODBC.conx!rstBOM.Set!PART(V.uGlobal.uBOM(V.Local.y)!PART)
+		F.ODBC.conx!rstBOM.Set!QUANTITY(V.uGlobal.uBOM(V.Local.y)!QUANTITY)
+		F.ODBC.conx!rstBOM.Set!LEVEL(V.uGlobal.uBOM(V.Local.y)!LEVEL)
+		F.ODBC.conx!rstBOM.Set!SEQU(V.uGlobal.uBOM(V.Local.y)!SEQU)
+		F.Intrinsic.String.Concat("SELECT * FROM V_INVENTORY_MSTR WHERE PART = '",V.Local.sPart,"' AND LOCATION = '",V.Screen.BomFlex!lblLoc.Caption,"'" ,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenRecordsetRO("rstINV",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rstINV.EOF,=,False)
+			F.ODBC.conx!rstBOM.Set!DESCRIPTION(V.ODBC.conx!rstINV.FieldValTrim!DESCRIPTION)
+			F.ODBC.conx!rstBOM.Set!ONHAND(V.ODBC.conx!rstINV.FieldValTrim!QTY_ONHAND)
+		F.Intrinsic.Control.Else
+			F.ODBC.conx!rstBOM.Set!DESCRIPTION("NOT AN INVENTORY PART")
+		F.Intrinsic.Control.EndIf
+		F.ODBC.conx!rstINV.Close
+		'Calculate Issue Quantity
+		F.Intrinsic.String.Concat("SELECT * FROM V_BOM_MSTR WHERE PART='",V.uGlobal.uBOM(V.Local.y)!PARENT,"' ",V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenRecordsetRO("rstBOMP",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rstBOMP.EOF,=,False)
+			F.Intrinsic.Math.Mult(V.uGlobal.uBOM(V.Local.y)!QUANTITY,V.ODBC.conx!rstBOMP.FieldValFloat!QUANTITY,V.Screen.BomFlex!txtQTY.Text,V.Local.ftemp)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.Math.Mult(V.uGlobal.uBOM(V.Local.y)!QUANTITY,V.Screen.BomFlex!txtQTY.Text,V.Local.ftemp)
+		F.Intrinsic.Control.EndIf
+		F.ODBC.conx!rstBOM.Set!ISSUE(V.Local.ftemp)
+		F.ODBC.conx!rstBOM.Set!ID(V.Local.Y)
+	
+		F.ODBC.conx!rstBOMP.Close
+
+		F.ODBC.conx!rstBOM.Update
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.y)
+
+F.ODBC.conx!rstBOM.Close
+
+F.Intrinsic.String.Concat("SELECT * FROM GCG_6079_BOM_ISS_CR WHERE TERMINAL='",V.Caller.Terminal,"' AND ",V.Ambient.DblQuote,"LEVEL",V.Ambient.DblQuote,"=1  ORDER BY ",V.Ambient.DblQuote,"LEVEL",V.Ambient.DblQuote,",SEQU",V.Local.sSQL)
+F.ODBC.Connection!conx.OpenRecordsetRW("rstBOM",V.Local.sSQL)	
+
+F.Intrinsic.Control.DoUntil(V.ODBC.conx!rstBOM.EOF,=,True)
+	F.Intrinsic.Math.Add(V.Global.iOrder,1,V.Global.iOrder)
+	F.ODBC.conx!rstBOM.Set!flag(V.Global.iOrder)
+	V.Global.sPart.Set(V.ODBC.conx!rstbom.fieldValTrim!part)
+	F.Intrinsic.Control.CallSub(Update)
+	F.ODBC.conx!rstBOM.Update
+	F.ODBC.conx!rstBOM.MoveNext
+F.Intrinsic.Control.Loop
+F.ODBC.conx!rstBOM.Close
+
+V.Local.rows.Declare(Long)
+
+V.Local.iCol.Declare(Long)
+
+'Build Flex grid BOM
+F.Intrinsic.String.Concat("SELECT '1' AS C1,ISSUE,",V.Ambient.DblQuote,"LEVEL",V.Ambient.DblQuote,",PART, DESCRIPTION, UM, QUANTITY, ONHAND FROM GCG_6079_BOM_ISS_CR  WHERE TERMINAL='",V.Caller.Terminal,"' ORDER BY FLAG",V.Local.sSQL)
+
+F.ODBC.Connection!conx.OpenRecordsetRO("rstBOM",V.Local.sSQL)
+
+Gui.BomFlex.gsBOM.cOLs(8)
+Gui.BomFlex.gsBOM.Rows(1)
+Gui.BomFlex.gsBOM.Rows(2)
+
+Gui.BomFlex.gsBOM.BuildStyle(1,0,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,1,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,2,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,3,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,4,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,5,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,6,"fontstyle","bold",True)
+Gui.BomFlex.gsBOM.BuildStyle(1,7,"fontstyle","bold",True)
+
+Gui.BomFlex.gsBOM.ApplyStyle(0,1)
+
+Gui.BomFlex.gsBOM.BuildStyle(2,0,"type","checkbox","Issue")
+
+Gui.BomFlex.gsBOM.BuildStyle(2,2,"type","locked",True)
+Gui.BomFlex.gsBOM.BuildStyle(2,3,"type","locked",True)
+Gui.BomFlex.gsBOM.BuildStyle(2,4,"type","locked",True)
+Gui.BomFlex.gsBOM.BuildStyle(2,5,"type","locked",True)
+Gui.BomFlex.gsBOM.BuildStyle(2,6,"type","locked",True)
+Gui.BomFlex.gsBOM.BuildStyle(2,7,"type","locked",True)
+
+'Gui.F_Main.gsFilter.BuildStyle(2,0,"Format","alignment",2)
+'Gui.F_Main.gsFilter.BuildStyle(2,1,"Format","alignment",2)
+'Gui.F_Main.gsFilter.BuildStyle(2,2,"Format","alignment",2)
+
+Gui.BomFlex.gsBOM.TextMatrix(0,0,"Select")
+Gui.BomFlex.gsBOM.ColWidth(0,650)
+Gui.BomFlex.gsBOM.TextMatrix(1,0,"Issue Qty")
+Gui.BomFlex.gsBOM.TextMatrix(2,0,"Level")
+Gui.BomFlex.gsBOM.ColWidth(2,650)
+Gui.BomFlex.gsBOM.TextMatrix(3,0,"Part")
+Gui.BomFlex.gsBOM.ColWidth(3,2000)
+Gui.BomFlex.gsBOM.TextMatrix(4,0,"Description")
+Gui.BomFlex.gsBOM.ColWidth(4,3000)
+Gui.BomFlex.gsBOM.TextMatrix(5,0,"UM")
+Gui.BomFlex.gsBOM.ColWidth(5,500)
+Gui.BomFlex.gsBOM.TextMatrix(6,0,"BOM Qty")
+Gui.BomFlex.gsBOM.TextMatrix(7,0,"On-Hand")
+
+Gui.BomFlex.gsBOM.Rows(2)
+
+Gui.BomFlex.gsBOM.FixedRows(1)
+
+Gui.BomFlex.gsBOM.LoadRecordset("conx!rstBOM",2)
+
+F.Intrinsic.Math.Sub(V.Screen.BomFlex!gsBOM.Rows,1,V.Local.rows)
+Gui.BomFlex.gsBOM.Rows(V.Local.rows)
+
+F.ODBC.conx!rstBOM.Close
+Gui.BomFlex..Enabled(true)
+Gui.BomFlex.gsBOM.Visible(true)
+Program.Sub.BOMGEN.End
+
+Program.Sub.cmdbrowse_click.Start
+'String array to hold Column Widths
+V.Local.widths.Declare(String)
+'String array to hold Column Titles
+V.Local.titles.Declare(String)
+'Selection result array String
+V.Local.results.Declare(String)
+V.Local.temp.Declare(String)
+V.Local.cancel.Declare(String)
+
+'Store Browser Column titles into titles array
+F.Intrinsic.String.Split("PART*!*DESCRIPTION","*!*",V.Local.titles)
+'Store Browser Column widths into array
+F.Intrinsic.String.Split("2000*!*3000","*!*",V.Local.widths)
+
+Gui.BomFlex..AlwaysOnTop(False)
+'Execute GAB Browser
+F.Intrinsic.String.Concat("Select PART, DESCRIPTION FROM V_INVENTORY_MSTR WHERE LOCATION='",V.Screen.BomFlex!lblLoc.Caption,"' ORDER BY PART ",V.Local.temp)
+F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+F.Intrinsic.UI.Browser("Select Part Number","conx",V.Local.temp,V.Local.titles,V.Local.widths,200,7000,V.Local.results)
+
+Gui.BomFlex..AlwaysOnTop(True)
+'Split result string into array
+F.Intrinsic.String.Split(V.Local.results,"*!*",V.Local.results)
+'Return Part number to input into inventory maintenance screen.
+
+'If not canceled then enter part and rev
+F.Intrinsic.String.Instr(V.Local.results,"***CANCEL***",1,V.Local.cancel)
+F.Intrinsic.Control.If(V.Local.cancel,=,0)
+	Gui.BomFlex.txtBOM.Text(V.Local.results(0))
+	Gui.BomFlex.txtDesc.Text(V.Local.results(1))
+	F.Intrinsic.Control.CallSub(Bomgen)
+F.Intrinsic.Control.EndIf
+Program.Sub.cmdbrowse_click.End
+
+Program.Sub.cmdissue_click.Start
+V.Local.ix.Declare(Long)
+V.Local.sIssue.Declare(String)
+V.Local.sCell.Declare(String)
+V.Local.iUbound.Declare(Long)
+V.Local.sPart.Declare(String)
+V.Local.sReV.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.iNeg.Declare(Long)
+V.Local.sQtyOnHand.Declare(String)
+V.Local.sQtyReq.Declare(String)
+V.Local.sBin.Declare(String)
+
+F.Intrinsic.Control.If(V.Screen.BomFlex!txtBOM.Value.Trim,=,"")
+	F.Intrinsic.UI.Msgbox("Please select a BOM Parent","Error")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Math.Sub(V.Screen.BomFlex!gsBOM.Rows,1,V.Local.iUbound)
+F.Intrinsic.Control.For(V.Local.ix,1,V.Local.iUbound,1)
+	
+	'skip if onhand	
+	Gui.BomFlex.gsBOM.GetTextMatrix(7,V.Local.ix,V.Local.sQtyOnHand)
+	Gui.BomFlex.gsBOM.GetTextMatrix(6,V.Local.ix,V.Local.sQtyReq)
+	
+	'if qty required is > Qty onhand, skip
+
+		Gui.BomFlex.gsBOM.GetTextMatrix(0,V.Local.ix,V.Local.sCell)
+		F.Intrinsic.Control.If(V.Local.sCell,=,1)
+			Gui.BomFlex.gsBOM.GetTextMatrix(3,V.Local.ix,V.Local.sCell)
+
+			F.Intrinsic.String.RPad(V.Local.sCell," ",20,V.Local.sPart)
+
+			F.Intrinsic.String.Concat(V.Local.sIssue,V.Local.sPart,",",",",V.Screen.BomFlex!lblLoc.Caption,",",V.Local.sIssue)
+	
+			Gui.BomFlex.gsBOM.GetTextMatrix(1,V.local.ix,V.local.scell)
+			F.Intrinsic.Control.If(V.Local.sCell.Trim,=,"")
+				V.Local.sCell.Set("0")
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.String.Instr(V.Local.sCell,"-",1,V.Local.iNeg)
+			F.Intrinsic.String.Replace(V.Local.sCell,"-","",V.Local.sCell)
+			F.Intrinsic.Control.If(V.Local.iNeg,>,0)
+				F.Intrinsic.String.Concat(V.Local.sCell,"-",V.Local.sCell)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.String.Concat(V.Local.sIssue,V.Local.sCell,",,,",V.Local.sBin,",,,I,",V.Ambient.NewLine,V.Local.sIssue)
+	
+		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.ix)
+
+F.Intrinsic.String.Instr(V.Screen.BomFlex!txtQTY.Text,"-",1,V.Local.iNeg)
+F.Intrinsic.String.Replace(V.Screen.BomFlex!txtQTY.Text,"-","",V.Local.sCell)
+F.Intrinsic.Control.If(V.Local.iNeg,>,0)
+	F.Intrinsic.String.Concat(V.Local.sCell,"-",V.Local.sCell)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.Concat(V.Local.sIssue,V.Screen.BomFlex!txtBOM.Text.TRIM,",,",V.Screen.BomFlex!lblLoc.Caption,",",V.Local.sCell,",,,",V.Screen.BomFlex!lblLoc.Caption,",,,R,",V.Local.sIssue)
+
+F.Intrinsic.String.Concat(V.Caller.FilesDir,"\",V.Caller.CompanyCode,"Issrec.txt",V.Local.sFile)
+
+F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sIssue)
+
+F.Intrinsic.String.Concat(V.Ambient.DblQuote,V.Caller.CompanyCode,"Issrec.txt",V.Ambient.DblQuote,V.Local.sFile)
+
+F.Intrinsic.Task.LaunchGSSSync("WIR104","-C",V.Local.sFile)
+F.Intrinsic.UI.Msgbox("BOM Issued.","BOM Issued.")
+Gui.BomFlex..AlwaysOnTop(False)
+F.Intrinsic.Control.CallSub(Cmdprint_click)
+Gui.BomFlex..AlwaysOnTop(True)
+Gui.BomFlex.gsBOM.Rows(1)
+Gui.BomFlex.gsBOM.Rows(2)
+Gui.BomFlex.gsBOM.ApplyStyle(0,1)
+Gui.BomFlex.gsBOM.fIXEDRows(1)
+Gui.BomFlex.cmdGENBOM.Enabled(True)
+Program.Sub.cmdissue_click.End
+
+Program.Sub.bomflex_resize.Start
+V.Local.width.Declare(Long)
+V.Local.height.Declare(Long)
+
+V.Local.width.Set(V.Screen.BomFlex.Width)
+V.Local.height.Set(V.Screen.BomFlex.Height)
+
+F.Intrinsic.Math.Sub(V.Local.width,500,V.Local.width)
+F.Intrinsic.Math.Sub(V.Local.height,1500,V.Local.height)
+
+F.Intrinsic.Control.If(V.Local.width,<,10455)
+	V.Local.width.Set(10455)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.If(V.Local.HEIGHT,<,4575)
+	V.Local.HEIGHT.Set(4575)
+F.Intrinsic.Control.EndIf
+Gui.BomFlex.gsBOM.Size(V.Local.width,V.Local.height)
+Program.Sub.bomflex_resize.End
+
+Program.Sub.cmdprint_click.Start
+V.Local.sParam.Declare(String)
+V.Local.sValues.Declare(String)
+V.Local.iRunID.Declare
+V.Local.iLogID.Declare
+V.Local.iRptID.Declare
+V.Local.sDate.Declare
+V.Local.iTerminal.Declare
+V.Local.iQty.Declare
+V.Local.iRet.Declare
+V.Local.sSQL.Declare
+V.Local.iCnt.Declare
+
+F.Intrinsic.Control.If(V.Screen.BomFlex!txtBOM.Text.Trim,=,"")
+	F.Intrinsic.UI.Msgbox("Please select a BOM Parent","Error")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+V.Local.iTerminal.Set(V.Caller.Terminal)
+V.Local.iQty.Set(V.Screen.BomFlex!txtQTY.Text)
+
+F.Intrinsic.String.Format(V.Ambient.Date,"YYDDMM",V.Local.sDate)
+
+F.Global.BI.GetRunID(V.Local.iRunID)
+
+F.Global.BI.GetIDFromName("GCG_6079_ISS_LBL.rpt",V.Local.iRptID)
+
+F.Global.BI.StartLogging(V.Local.iRunID,V.Local.iRptID,-1,"",V.Local.iLogID)
+F.Global.BI.StopLogging(V.Local.iLogID)
+
+F.ODBC.Connection!conts.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+F.Intrinsic.Control.For(V.Local.iCnt,1,V.Local.iQty,1)
+	F.Intrinsic.String.Build("Insert into GCG_6079_CR_TEMP (PART_NO,LOC,DESCRIPTION,DATE_LBL,TRMNL,RUNID,LOGID) values ('{0}','{1}','{2}','{3}','{4}','{5}','{6}')",V.Screen.BomFlex!txtBOM.Text.Trim,V.Screen.BomFlex!lblLoc.Caption,V.Screen.BomFlex!txtDesc.Text.Trim,V.Local.sDate,V.Local.iTerminal,V.Local.iRunID,V.Local.iLogID,V.Local.sSQL)
+	F.ODBC.Connection!conts.Execute(V.Local.sSQL)
+F.Intrinsic.Control.Next(V.Local.iCnt)
+
+F.Intrinsic.String.Build("TRMNL*!*RUNID*!*LOGID","",V.Local.sParam)
+
+F.Intrinsic.String.Build("{0}*!*{1}*!*{2}",V.Local.iTerminal,V.Local.iRunID,V.Local.iLogID,V.Local.sValues)
+
+Gui.BomFlex..AlwaysOnTop(False)
+
+F.Global.BI.RunReportPreProcessor(V.Local.iRunID,V.Local.iLogID,V.Local.sParam,V.Local.sValues,V.Local.iRptID,-1,True,"",-1,"",-1,"","",V.Local.iRet)
+
+Gui.BomFlex..AlwaysOnTop(True)
+
+F.Intrinsic.String.Build("Delete GCG_6079_CR_TEMP where TRMNL = '{0}'",V.Local.iTerminal,V.Local.sSQL)
+F.ODBC.Connection!conts.Execute(V.Local.sSQL)
+
+F.ODBC.Connection!conts.Close
+Program.Sub.cmdprint_click.End
+
+Program.Sub.txtbom_lostfocus.Start
+
+F.Intrinsic.Control.CallSub(Bomgen)
+Gui.BomFlex.cmdGENBOM.Enabled(False)
+
+Program.Sub.txtbom_lostfocus.End
+
+Program.Sub.bomflex_unload.Start
+F.Intrinsic.Control.End
+Program.Sub.bomflex_unload.End
